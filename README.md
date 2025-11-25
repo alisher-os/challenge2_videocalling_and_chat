@@ -1,30 +1,50 @@
 # Real-Time Chat Application
 
-A full-stack real-time chat application built with Rust (backend) and React (frontend).
+A full-stack real-time chat and video calling application built with Rust (backend) and React (frontend), designed for peer-to-peer communication with enterprise-grade real-time features.
 
-## Features
+## ✨ Features
 
-- ✅ Real-time messaging via WebSocket
-- ✅ Online/offline user status
-- ✅ Read receipts (double checkmarks)
-- ✅ Typing indicators
-- ✅ Desktop notifications for new messages
-- ✅ Video calling with WebRTC (peer-to-peer)
-- ✅ Fully responsive design for mobile devices
-- ✅ PWA support (installable on mobile)
+- 💬 **Real-time messaging** via WebSocket (sub-second latency)
+- 👥 **Online/offline status** with presence tracking
+- ✓✓ **Read receipts** (double checkmarks like WhatsApp)
+- ⌨️ **Typing indicators** (see when others are typing)
+- 🔔 **Desktop notifications** with sound alerts
+- 📹 **Video calling** with WebRTC (peer-to-peer, no server bandwidth)
+- 📱 **Fully responsive** design (desktop, tablet, mobile)
+- 📸 **Photo sharing** with inline preview
+- 📎 **File sharing** (up to 5MB)
+- 🔢 **Unread message badges** on user list
+- 🔒 **HTTPS/WSS support** for production and mobile
 
-## Tech Stack
+## 🛠️ Tech Stack
 
 ### Backend
-- **Rust** with **Axum** web framework
-- **WebSocket** for real-time communication
-- **Tokio** for async runtime
-- **DashMap** for concurrent data structures
+- **Rust** (2021 edition) with **Axum 0.7** web framework
+- **WebSocket** for bidirectional real-time communication
+- **Tokio** async runtime with full features
+- **DashMap** 5.5 for lock-free concurrent state management
+- **Serde** for JSON serialization/deserialization
+- **axum-server** with rustls for HTTPS/WSS support
+- **UUID** for unique IDs, **Chrono** for timestamps
 
 ### Frontend
-- **React** 18
-- **WebSocket API** for real-time communication
-- Modern CSS with gradients and animations
+- **React** 18 with hooks-based architecture
+- **WebSocket API** for real-time server communication
+- **WebRTC** for peer-to-peer video/audio
+- Modern CSS3 with gradients, animations, and responsive design
+- **File API** for photo/file uploads
+
+### Development Tools
+- **Bun** or npm for frontend package management
+- **Cargo** for Rust dependency management
+- **OpenSSL** for self-signed certificates (development)
+
+## 📚 Documentation
+
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System design, data flow, and technical decisions
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Code standards and contribution guidelines
+- **[MOBILE_SETUP.md](MOBILE_SETUP.md)** - HTTPS setup for mobile video calling
+- **[.cursorrules](.cursorrules)** - AI assistant guidelines for this project
 
 ## Getting Started
 
@@ -39,17 +59,31 @@ cd backend
 cargo run
 ```
 
-The backend server will start on `http://localhost:3001`
+The backend server will start on `https://0.0.0.0:3002`
+
+**Note**: Backend uses HTTPS for mobile compatibility. Self-signed certificates are in `/certs/`.
 
 ### Frontend Setup
 
 ```bash
 cd frontend
-npm install
-npm start
+npm install  # or: bun install
+npm start    # or: bun start
 ```
 
-The frontend will start on `http://localhost:3000`
+The frontend will start on `https://localhost:3001` (network: `https://[your-ip]:3001`)
+
+### SSL Certificates (Required)
+
+For HTTPS/video calling:
+```bash
+mkdir -p certs
+cd certs
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes \
+  -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:10.0.35.132"
+```
+
+Replace `10.0.35.132` with your local IP address.
 
 ## Usage
 
@@ -114,12 +148,56 @@ The application is fully responsive and optimized for mobile devices:
 
 All other features (chat, typing, read receipts, notifications) work perfectly on mobile with HTTP!
 
-## Future Enhancements
+## 🚀 Future Enhancements
 
-- Database persistence for messages
-- User authentication with passwords
-- Group chats and group video calls
-- File sharing
-- Message search
-- Screen sharing during calls
+- [ ] Database persistence (PostgreSQL/MongoDB)
+- [ ] User authentication with passwords/JWT
+- [ ] Group chats and channels
+- [ ] Group video calls with SFU (Selective Forwarding Unit)
+- [ ] Message search and filtering
+- [ ] Screen sharing during calls
+- [ ] Voice messages
+- [ ] Message reactions (emoji)
+- [ ] Message editing and deletion
+- [ ] End-to-end encryption
+
+## 🤖 AI Assistant Instructions
+
+This repository includes comprehensive documentation for AI coding assistants:
+
+- **`.cursorrules`**: Project-specific patterns, common pitfalls, and guidelines
+- **`ARCHITECTURE.md`**: System design, data flow diagrams, and technical decisions
+- **`CONTRIBUTING.md`**: Code standards, examples of good/bad patterns
+
+When working with AI assistants on this project:
+1. Reference `.cursorrules` for project conventions
+2. Check `ARCHITECTURE.md` for system understanding
+3. Follow patterns in `CONTRIBUTING.md` for code quality
+4. Always test changes on both desktop and mobile
+5. Verify WebSocket message types match backend enums
+
+## 🐛 Troubleshooting
+
+### Video call shows black screen
+- Ensure HTTPS is enabled on both frontend and backend
+- Accept self-signed certificates in browser
+- Check browser console for `ontrack` events
+- Verify tracks are not muted: check `track.muted` and `track.enabled`
+
+### WebSocket connection fails
+- Verify backend is running on port 3002
+- Check protocol matches (both HTTP or both HTTPS)
+- Accept SSL certificate by visiting `https://localhost:3002`
+- Check firewall allows WebSocket connections
+
+### Messages not appearing
+- Check browser console for WebSocket errors
+- Verify user ID is set (appears in console on login)
+- Ensure `user_sockets` contains both users (backend logs)
+
+See `.cursorrules` for complete troubleshooting guide.
+
+## 📄 License
+
+MIT License - Feel free to use for learning and development.
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './ChatWindow.css';
+import VoiceRecorder from './VoiceRecorder';
 
 function ChatWindow({
   currentUser,
@@ -10,16 +11,25 @@ function ChatWindow({
   onMarkAsRead,
   onTyping,
   onStartVideoCall,
-  onBack
+  onAddReaction,
+  onRemoveReaction,
+  onBack,
+  onLoadMore,
+  hasMoreMessages,
+  loadingHistory
 }) {
   const [input, setInput] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
+  const [showReactionPicker, setShowReactionPicker] = useState(null); // message id
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const hasTypedRef = useRef(false);
   const markedAsReadRef = useRef(new Set());
   const fileInputRef = useRef(null);
+
+  const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
   useEffect(() => {
     scrollToBottom();
@@ -118,9 +128,72 @@ function ChatWindow({
     }
   };
 
+  const handleReactionClick = (messageId, emoji) => {
+    const message = messages.find(m => m.id === messageId);
+    if (!message) return;
+
+    const currentReaction = message.reactions?.[currentUser.id];
+    
+    if (currentReaction === emoji) {
+      // Remove reaction if clicking same emoji
+      onRemoveReaction(messageId);
+    } else {
+      // Add or change reaction
+      onAddReaction(messageId, emoji);
+    }
+    
+    setShowReactionPicker(null);
+  };
+
+  const renderReactions = (message) => {
+    const reactions = message.reactions || {};
+    const reactionCounts = {};
+    
+    // Count reactions by emoji
+    Object.values(reactions).forEach(emoji => {
+      reactionCounts[emoji] = (reactionCounts[emoji] || 0) + 1;
+    });
+
+    if (Object.keys(reactionCounts).length === 0) return null;
+
+    return (
+      <div className="message-reactions">
+        {Object.entries(reactionCounts).map(([emoji, count]) => (
+          <div 
+            key={emoji} 
+            className={`reaction-bubble ${reactions[currentUser.id] === emoji ? 'own-reaction' : ''}`}
+            onClick={() => handleReactionClick(message.id, emoji)}
+          >
+            <span className="reaction-emoji">{emoji}</span>
+            {count > 1 && <span className="reaction-count">{count}</span>}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const handleSendVoice = (voiceData) => {
+    console.log('handleSendVoice called, sending voice message...');
+    onSendMessage('🎤 Voice message', voiceData);
+    console.log('Voice message sent, closing recorder...');
+    setIsRecordingVoice(false);
+  };
+
+  const handleCancelVoice = () => {
+    console.log('handleCancelVoice called, closing recorder...');
+    setIsRecordingVoice(false);
+  };
+
+  const formatDuration = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const renderMessageContent = (message) => {
     const hasFile = message.file_data && message.file_name;
     const isImage = hasFile && message.file_type?.startsWith('image/');
+    const isAudio = hasFile && message.file_type?.startsWith('audio/');
 
     return (
       <>
@@ -133,6 +206,14 @@ function ChatWindow({
               onClick={() => window.open(message.file_data, '_blank')}
             />
           </div>
+        ) : isAudio ? (
+          <div className="message-audio-container">
+            <div className="audio-icon">🎤</div>
+            <audio src={message.file_data} controls className="message-audio-player" />
+            {message.audio_duration && (
+              <div className="audio-duration">{formatDuration(message.audio_duration)}</div>
+            )}
+          </div>
         ) : hasFile ? (
           <div className="message-file-container">
             <a 
@@ -144,7 +225,7 @@ function ChatWindow({
             </a>
           </div>
         ) : null}
-        {message.content && <div className="message-text">{message.content}</div>}
+        {message.content && !isAudio && <div className="message-text">{message.content}</div>}
       </>
     );
   };
@@ -177,29 +258,70 @@ function ChatWindow({
       </div>
       
       <div className="chat-messages">
+        {/* Load More Button */}
+        {hasMoreMessages && onLoadMore && (
+          <div className="load-more-container">
+            <button 
+              className="load-more-btn" 
+              onClick={onLoadMore}
+              disabled={loadingHistory}
+            >
+              {loadingHistory ? (
+                <span className="loading-spinner">⏳</span>
+              ) : (
+                '↑ Load earlier messages'
+              )}
+            </button>
+          </div>
+        )}
+        
         {messages.map((message) => {
           const isOwn = message.from_user_id === currentUser.id;
           return (
             <div
               key={message.id}
-              className={`message ${isOwn ? 'own' : 'other'}`}
+              className={`message-wrapper ${isOwn ? 'own' : 'other'}`}
             >
-              <div className="message-content">
-                {renderMessageContent(message)}
-              </div>
-              <div className="message-meta">
-                <span className="message-time">
-                  {new Date(message.timestamp).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                </span>
-                {isOwn && (
-                  <span className={`read-indicator ${message.read ? 'read' : 'unread'}`}>
-                    {message.read ? '✓✓' : '✓'}
+              <div
+                className={`message ${isOwn ? 'own' : 'other'}`}
+                onMouseEnter={() => setShowReactionPicker(message.id)}
+                onMouseLeave={() => setShowReactionPicker(null)}
+              >
+                <div className="message-content">
+                  {renderMessageContent(message)}
+                </div>
+                <div className="message-meta">
+                  <span className="message-time">
+                    {new Date(message.timestamp).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
                   </span>
+                  {isOwn && (
+                    <span className={`read-indicator ${message.read ? 'read' : 'unread'}`}>
+                      {message.read ? '✓✓' : '✓'}
+                    </span>
+                  )}
+                </div>
+                
+                {/* Reaction Picker - shows on hover */}
+                {showReactionPicker === message.id && (
+                  <div className="reaction-picker">
+                    {REACTION_EMOJIS.map(emoji => (
+                      <button
+                        key={emoji}
+                        className="reaction-emoji-btn"
+                        onClick={() => handleReactionClick(message.id, emoji)}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
+              
+              {/* Display existing reactions */}
+              {renderReactions(message)}
             </div>
           );
         })}
@@ -230,33 +352,53 @@ function ChatWindow({
         </div>
       )}
 
-      <form className="chat-input-form" onSubmit={handleSubmit}>
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileSelect}
-          accept="image/*,application/pdf,.doc,.docx,.txt"
-          style={{ display: 'none' }}
+      {isRecordingVoice && (
+        <VoiceRecorder 
+          onSend={handleSendVoice}
+          onCancel={handleCancelVoice}
         />
-        <button 
-          type="button" 
-          className="attach-button"
-          onClick={() => fileInputRef.current?.click()}
-          title="Attach file or photo"
-        >
-          📎
-        </button>
-        <input
-          type="text"
-          className="chat-input"
-          placeholder="Type a message..."
-          value={input}
-          onChange={handleInputChange}
-        />
-        <button type="submit" className="send-button" disabled={!input.trim() && !selectedFile}>
-          Send
-        </button>
-      </form>
+      )}
+
+      {!isRecordingVoice && (
+        <form className="chat-input-form" onSubmit={handleSubmit}>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileSelect}
+            accept="image/*,application/pdf,.doc,.docx,.txt"
+            style={{ display: 'none' }}
+          />
+          <button 
+            type="button" 
+            className="attach-button"
+            onClick={() => fileInputRef.current?.click()}
+            title="Attach file or photo"
+          >
+            📎
+          </button>
+          <input
+            type="text"
+            className="chat-input"
+            placeholder="Type a message..."
+            value={input}
+            onChange={handleInputChange}
+          />
+          <button 
+            type="button"
+            className="voice-button"
+            onClick={() => {
+              console.log('🎤 button clicked, opening voice recorder...');
+              setIsRecordingVoice(true);
+            }}
+            title="Send voice message"
+          >
+            <span>🎤</span>
+          </button>
+          <button type="submit" className="send-button" disabled={!input.trim() && !selectedFile}>
+            Send
+          </button>
+        </form>
+      )}
     </div>
   );
 }

@@ -1,0 +1,148 @@
+# Real-Time Chat Application - AI Assistant Rules
+
+## Project Overview
+This is a full-stack real-time chat application with video calling capabilities.
+- **Backend**: Rust + Axum framework (WebSocket server on port 3002)
+- **Frontend**: React 18 (dev server on port 3001)
+- **Communication**: WebSocket for real-time messaging, WebRTC for video calls
+- **Security**: HTTPS/WSS required for mobile camera/microphone access
+
+## Architecture Patterns
+
+### Backend (Rust/Axum)
+- **State Management**: Uses `DashMap` for thread-safe concurrent access
+  - `users: Arc<DashMap<String, User>>` - All users (online/offline)
+  - `messages: Arc<DashMap<String, ChatMessage>>` - All messages
+  - `user_sockets: Arc<DashMap<String, UnboundedSender>>` - WebSocket connections
+- **Message Pattern**: Tagged enums with serde (`#[serde(tag = "type")]`)
+- **Async Runtime**: Tokio with async/await
+- **WebSocket**: Split into sender/receiver tasks with mpsc channels
+- **Error Handling**: Use `tracing` for logging, return errors via WebSocket
+
+### Frontend (React)
+- **State Management**: React hooks (useState, useEffect, useRef)
+- **WebSocket**: Single connection per user, reconnect on disconnect
+- **Component Structure**:
+  - `App.js` - Main orchestrator, handles WebSocket and state
+  - `ChatWindow.js` - Individual chat UI
+  - `OnlineUsers.js` - User list sidebar
+  - `VideoCall.js` - WebRTC video call UI
+  - `IncomingCall.js` - Call notification modal
+- **Refs Pattern**: Use refs for values needed in callbacks (userRef, onlineUsersRef)
+- **Mobile-First**: Always consider mobile responsiveness in CSS
+
+## Code Standards
+
+### Rust Backend
+1. **Always use structured logging**: `tracing::info!()`, `tracing::error!()`
+2. **Clone shared state**: Clone Arc references when passing to async tasks
+3. **Handle disconnects gracefully**: Clean up user_sockets and mark users offline
+4. **Use proper error types**: Return `Result<T, E>` for fallible operations
+5. **WebSocket message format**: Must match `ClientMessage` or `ServerMessage` enums
+6. **Security**: Always use CORS permissive for development, restrict in production
+
+### React Frontend
+1. **Always use functional components** with hooks
+2. **Memoize callbacks**: Use useCallback for functions passed as props
+3. **Clean up effects**: Return cleanup functions in useEffect
+4. **Mobile Safari compatibility**: Always include `playsInline` for video elements
+5. **WebSocket reconnection**: Implement reconnect logic with connection state tracking
+6. **Refs for external values**: Use refs for values accessed in WebSocket callbacks
+7. **CSS naming**: Use BEM-like naming (component-element-modifier)
+
+## Common Pitfalls & Solutions
+
+### WebRTC Video Issues
+- **Problem**: Black screen on mobile
+  - **Solution**: Ensure `playsInline`, `autoplay` attributes are set
+  - **Solution**: Call `.play()` explicitly after setting srcObject
+  - **Solution**: Use state (not just refs) for remoteStream to trigger re-renders
+
+- **Problem**: Video works one way but not the other
+  - **Solution**: Add `offerToReceiveAudio: true, offerToReceiveVideo: true` to createOffer
+  - **Solution**: Handle ontrack events correctly, use event.streams[0]
+
+- **Problem**: Connection fails or disconnects
+  - **Solution**: Add TURN servers (relay) for NAT traversal
+  - **Solution**: Use STUN servers: stun.l.google.com:19302
+
+### WebSocket Issues
+- **Problem**: HTTPS frontend can't connect to HTTP backend
+  - **Solution**: Both must use HTTPS/WSS or both HTTP/WS
+  - **Solution**: Use axum-server with tls-rustls for HTTPS backend
+
+- **Problem**: Messages not arriving
+  - **Solution**: Check user_sockets contains the user_id
+  - **Solution**: Verify WebSocket readyState === WebSocket.OPEN before sending
+
+### State Management
+- **Problem**: Stale closure values in callbacks
+  - **Solution**: Use refs for values needed in WebSocket handlers
+  - **Solution**: Update refs in useEffect when state changes
+
+## File Naming Conventions
+- **Components**: PascalCase.js (e.g., `ChatWindow.js`)
+- **Styles**: Match component name (e.g., `ChatWindow.css`)
+- **Backend**: snake_case.rs (e.g., `main.rs`)
+- **Config**: lowercase with dashes (e.g., `package.json`, `Cargo.toml`)
+
+## When Adding New Features
+
+### Adding a New Message Type
+1. Add to `ClientMessage` enum in backend/src/main.rs
+2. Add to `ServerMessage` enum if server needs to broadcast
+3. Add handler in `match client_msg` block
+4. Add frontend handler in `handleServerMessage` switch
+5. Update WebSocket message listener in components if needed
+
+### Adding a New UI Component
+1. Create Component.js in frontend/src/components/
+2. Create matching Component.css
+3. Import in App.js or parent component
+4. Follow existing patterns for props (currentUser, otherUser, ws, etc.)
+5. Add mobile responsive styles with @media queries
+
+### Adding File/Data Transfer
+1. Use base64 encoding for binary data over WebSocket
+2. Add file size limits (current: 5MB max)
+3. Include MIME type for proper rendering
+4. Consider chunking for large files (future enhancement)
+
+## Testing Checklist
+When implementing features, verify:
+- [ ] Works on desktop (Chrome, Firefox, Safari)
+- [ ] Works on mobile (iOS Safari, Chrome)
+- [ ] WebSocket reconnects properly on disconnect
+- [ ] No memory leaks (cleanup in useEffect return)
+- [ ] Responsive design works on all screen sizes
+- [ ] Console has no errors
+- [ ] Backend compiles without warnings (`cargo build`)
+- [ ] Frontend compiles without warnings
+
+## Development Workflow
+1. **Backend changes**: Edit Rust → `cargo run` (watch for compile errors)
+2. **Frontend changes**: Edit React → Auto hot-reload (check console)
+3. **Both running**: Backend on :3002, Frontend on :3001
+4. **HTTPS mode**: Use self-signed certs in `/certs` directory
+
+## Security Notes
+- Self-signed certificates in `/certs/` for development only
+- Production should use Let's Encrypt or proper certificates
+- Never commit private keys to git (.gitignore includes /certs/)
+- CORS is permissive in dev, should be restricted in production
+
+## Performance Considerations
+- Messages stored in memory (consider DB for production)
+- No message pagination (add for large message histories)
+- File uploads limited to 5MB (base64 overhead ~33%)
+- WebRTC uses public TURN servers (consider deploying your own)
+
+## AI Assistant Guidelines
+When asked to implement features:
+1. **Check existing patterns first** - Look at similar features already implemented
+2. **Update both backend and frontend** - Most features need changes to both
+3. **Add comprehensive logging** - Use console.log (frontend) and tracing (backend)
+4. **Test on mobile** - Always consider mobile compatibility
+5. **Handle errors gracefully** - Show user-friendly error messages
+6. **Update this file** if you discover new patterns or pitfalls
+
